@@ -1,11 +1,12 @@
-// We use webpack to package our shaders as string resources that we can import
 import shaderCode from "./matrixMulti.wgsl";
+import { quitIfWebGPUNotAvailable } from "./util";
+import TimestampQueryManager from "./TimestampQueryManager";
 
 // Initialize the matrices with random values
 function init_matrix(matrix: Uint32Array, width: number) {
     for(let i = 0; i < width; i++) {
         for(let j = 0; j < width; j++) {
-            matrix[i*width+j] = Math.floor(Math.random() * 10);
+            matrix[i*width+j] = Math.floor(Math.random() * 5);
         }
     }
 }
@@ -29,6 +30,18 @@ function verify_result(M: Uint32Array, N: Uint32Array, P: Uint32Array, width: nu
     console.log("Matrix multiplication result is correct.");
 }
 
+// Function to print a matrix to the console
+function printMatrix(matrix: Uint32Array, width: number, label: string) {
+    console.log(`\n${label}:`);
+    for (let row = 0; row < width; row++) {
+        let rowStr = '';
+        for (let col = 0; col < width; col++) {
+            rowStr += matrix[row * width + col].toString().padStart(4) + ' ';
+        }
+        console.log(rowStr);
+    }
+}
+
 
 (async () => {
     if (navigator.gpu === undefined) {
@@ -38,8 +51,27 @@ function verify_result(M: Uint32Array, N: Uint32Array, P: Uint32Array, width: nu
     }
 
     // Get a GPU device to render with
-    var adapter = await navigator.gpu.requestAdapter();
-    var device = await adapter.requestDevice();
+    const adapter = await navigator.gpu?.requestAdapter({
+        featureLevel: 'compatibility',
+    });
+    const supportsTimestampQueries = adapter?.features.has('timestamp-query');
+    const device = await adapter?.requestDevice({
+        // We request a device that has support for timestamp queries
+        requiredFeatures: supportsTimestampQueries ? ['timestamp-query'] : [],
+    });
+    quitIfWebGPUNotAvailable(adapter, device);
+
+    const computePassDescriptor: GPUComputePassDescriptor = {};
+    const perfDisplay = document.querySelector('#info pre');
+    const timestampQueryManager = new TimestampQueryManager(device, (elapsedNs) => {
+        // Convert from nanoseconds to milliseconds:
+        const elapsedMs = Number(elapsedNs) * 1e-6;
+        perfDisplay.innerHTML = `Compute Pass duration: ${elapsedMs.toFixed(6)} ms`;
+    });
+
+    if (!supportsTimestampQueries) {
+        perfDisplay.innerHTML = 'Timestamp queries are not supported';
+    }
 
     // Setup shader modules
     var shaderModule = device.createShaderModule({code: shaderCode});
@@ -59,7 +91,7 @@ function verify_result(M: Uint32Array, N: Uint32Array, P: Uint32Array, width: nu
     }
 
     // Define the size of matrix
-    const Width = 1 << 10;
+    const Width = 512;
     const matrixSize = Width * Width;
     const bufferSize = matrixSize * Uint32Array.BYTES_PER_ELEMENT;
 
@@ -67,7 +99,9 @@ function verify_result(M: Uint32Array, N: Uint32Array, P: Uint32Array, width: nu
     const h_M = new Uint32Array(matrixSize);
     const h_N = new Uint32Array(matrixSize);
     init_matrix(h_M, Width);
+    // printMatrix(h_M, Width, "Matrix M");
     init_matrix(h_N, Width);
+    // printMatrix(h_N, Width, "Matrix N");
 
     // Allocate GPU memory for M, N, P, and Width
     const d_M = device.createBuffer({
@@ -140,13 +174,17 @@ function verify_result(M: Uint32Array, N: Uint32Array, P: Uint32Array, width: nu
         },
     });
 
+    timestampQueryManager.addTimestampWrite(computePassDescriptor);
+
     // Create a command encoder and a compute pass
     const commandEncoder = device.createCommandEncoder();
-    const pass = commandEncoder.beginComputePass();
+    const pass = commandEncoder.beginComputePass(computePassDescriptor);
     pass.setPipeline(computePipeline);
     pass.setBindGroup(0, bindGroup);
     pass.dispatchWorkgroups(Math.ceil(Width / 16), Math.ceil(Width / 16));
     pass.end();
+
+    timestampQueryManager.resolve(commandEncoder);
 
     // Copy the result from GPU to CPU
     const h_P = device.createBuffer({
@@ -157,9 +195,15 @@ function verify_result(M: Uint32Array, N: Uint32Array, P: Uint32Array, width: nu
 
     // Wait for the queue to finish and read the result
     device.queue.submit([commandEncoder.finish()]);
+    await device.queue.onSubmittedWorkDone();
     await h_P.mapAsync(GPUMapMode.READ);
+    timestampQueryManager.tryInitiateTimestampDownload();
+
+    const result = new Uint32Array(h_P.getMappedRange());
+
+    // Print the result matrix
+    // printMatrix(result, Width, "Matrix P");
 
     // Verify the result
-    const result = new Uint32Array(h_P.getMappedRange());
     verify_result(h_M, h_N, result, Width);
 })();
