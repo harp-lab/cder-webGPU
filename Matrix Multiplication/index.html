@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Matrix Multiplication Demo</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 20px;
+      background: #f9f9f9;
+    }
+    h2 {
+      margin-top: 30px;
+    }
+    .matrix-container {
+      display: flex;
+      gap: 40px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+    .matrix {
+      display: grid;
+      gap: 5px;
+    }
+    .matrix input {
+      width: 50px;
+      height: 30px;
+      text-align: center;
+    }
+    #resultMatrix input {
+      background: #e0e0e0;
+    }
+    .slider-container {
+      margin-bottom: 20px;
+    }
+    button {
+      padding: 10px 20px;
+      font-size: 16px;
+      margin: 10px 10px 20px 0;
+      cursor: pointer;
+    }
+    .note {
+      font-size: 14px;
+      color: #555;
+      margin-top: -10px;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Matrix Multiplication Demo</h1>
+
+  <div class="slider-container">
+    <label for="sizeSlider">Matrix size: <span id="matrixSizeDisplay">2</span> x <span id="matrixSizeDisplay2">2</span></label><br>
+    <input type="range" id="sizeSlider" min="2" max="10" value="2">
+  </div>
+
+  <div class="matrix-container">
+    <div>
+      <h2>Matrix A</h2>
+      <div id="matrixA" class="matrix"></div>
+    </div>
+    <div>
+      <h2>Matrix B</h2>
+      <div id="matrixB" class="matrix"></div>
+    </div>
+    <div>
+      <h2>Result Matrix A × B</h2>
+      <div id="resultMatrix" class="matrix"></div>
+      <!-- <p id="timeDisplay">
+        <span id="jsTime">JavaScript time: 0 ms</span><br>
+        <span id="gpuTime">WebGPU time: 0 ms</span>
+      </p> -->
+    </div>
+  </div>
+
+  <button id="calculateBtn">Calculate</button>
+  <button id="clearBtn">Clear Matrices</button>
+  <button id="randomBtn">Randomize Matrices</button>
+  <hr style="margin: 30px 0;">
+
+  <h2>High-Dimension Matrix Performance Test</h2>
+  <label for="largeMatrixSize">Select matrix size:</label>
+  <select id="largeMatrixSize">
+    <option value="128">128 x 128</option>
+    <option value="256">256 x 256</option>
+    <option value="512" selected>512 x 512</option>
+    <option value="1024">1024 x 1024</option>
+  </select>
+  <button id="largeTestBtn">Run Test</button>
+  <p id="largeMatrixTime">Time: Not yet tested</p>
+</body>
+</html>
