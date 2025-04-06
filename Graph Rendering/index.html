@@ -4,34 +4,82 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
     <!-- Bootstrap CSS -->
-    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css"
-                           integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm"
-                           crossorigin="anonymous">
-
-    <title>WebGPU Webpack + TypeScript Starter</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
+    <title>WebGPU Graph Rendering</title>
+    <style>
+        canvas {
+            border: 1px solid #ddd;
+            background-color: white;
+            margin-bottom: 15px;
+            margin: 0;
+        }
+        .controls {
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: #f8f9fa;
+            margin-bottom: 15px;
+        }
+        .control-label {
+            margin-bottom: 0;
+            font-weight: bold;
+        }
+    </style>
 </head>
 <body>
-    <div class="container mt-4">
+    <div class="container-fluid mt-4">
+        <h4 class="text-center mb-3">WebGPU Graph Rendering</h4>
+        
         <div class="row">
-            <div class="col-12 text-center">
-                <h4>WebGPU Webpack + TypeScript Starter</h4>
-                <canvas id="webgpu-canvas" class="img-fluid" width="600" height="600"></canvas>
-                <div class="col-12 alert alert-danger" id="no-webgpu" style="display:none;">
+            <div class="col-md-8">
+                <div style="display: flex; justify-content: center; width: 100%;">
+                    <canvas id="webgpu-canvas" class="img-fluid"  width="600" height="600"></canvas>
+                </div>
+                <div class="alert alert-danger" id="no-webgpu" style="display:none;">
                     <h4>Error: Your browser does not support WebGPU</h4>
-                    <p>You can find out how to get access to it in Chrome Canary
-                    <a href="https://web.dev/gpu/#use">here</a>.</p>
+                    <p>You can find out how to get access to it in Chrome Canary <a href="https://web.dev/gpu/#use">here</a>.</p>
                 </div>
             </div>
-            <div class="mx-auto col-12 col-lg-8 row">
-                <h4>Description</h4>
-                <p>This is a starter template to get you quickly set up with a development
-                environmnet for WebGPU! The template uses <a href="https://webpack.js.org/">webpack</a>
-                to manage dependencies and build. Grab the template on
-                <a href="https://github.com/Twinklebear/webgpu-webpack-starter">GitHub</a> and
-                make some cool stuff!</p>
+            
+            <div class="col-md-4">
+                <div class="controls">
+                    <h5>Graph Controls</h5>
+                    
+                    <div class="form-group">
+                        <label for="node-count" class="control-label">Number of Nodes: <span id="node-count-value">10</span></label>
+                        <input type="range" class="form-control-range" id="node-count" min="5" max="100" step="1" value="10">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="cooling-factor" class="control-label">Cooling Factor: <span id="cooling-value">0.975</span></label>
+                        <input type="range" class="form-control-range" id="cooling-factor" min="0.8" max="0.999" step="0.001" value="0.975">
+                    </div>
+                    
+                    <div class="form-group">
+                        <button id="random-graph" class="btn btn-primary">Generate Random Graph</button>
+                        <button id="run-layout" class="btn btn-success ml-2">Run Force Directed Layout</button>
+                    </div>
+                </div>
+                
+                <div class="controls">
+                    <h5>Description</h5>
+                    <p>This application demonstrates a force-directed graph layout and rendering algorithm implemented with WebGPU. 
+                    Unconnected nodes repel each other while connected nodes are pulled together, creating a physically optimal visualization.</p>
+                    <p><strong>Controls:</strong></p>
+                    <ul>
+                        <li><strong>Number of Nodes</strong>: Sets the number of nodes for the next random graph generation</li>
+                        <li><strong>Cooling Factor</strong>: Controls how quickly the layout stabilizes (higher values = slower cooling)</li>
+                        <li><strong>Generate Random Graph</strong>: Creates a new random graph with the specified number of nodes</li>
+                        <li><strong>Run Force Directed Layout</strong>: Starts the force-directed layout algorithm</li>
+                    </ul>
+                </div>
             </div>
         </div>
     </div>
+    
+    <!-- JavaScript dependencies -->
+    <script src="https://code.jquery.com/jquery-3.2.1.slim.min.js" integrity="sha384-KJ3o2DKtIkvYIK3UENzmM7KCkRr/rE9/Qpg6aAZGJwFDMVNA/GpGFF93hXpG5KkN" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js" integrity="sha384-ApNbgh9B+Y1QKtv3Rn7W3mgPxhU9K/ScQsAP7hUibX39j7fakFPskvXusvfa0b4Q" crossorigin="anonymous"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js" integrity="sha384-JZR6Spejh4U02d8jOt6vLEHfe/JQGiRRSQQxSfFWpi1MquVdAyjUar5+76PVCmYl" crossorigin="anonymous"></script>
 </body>
 </html>
-
