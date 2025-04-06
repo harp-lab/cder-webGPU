@@ -56,7 +56,19 @@
                     </div>
                     
                     <div class="form-group">
-                        <button id="random-graph" class="btn btn-primary">Generate Random Graph</button>
+                        <label class="control-label">Graph Type:</label>
+                        <div class="btn-group btn-group-toggle" data-toggle="buttons">
+                            <label class="btn btn-outline-primary">
+                                <input type="radio" name="graph-type" id="random-graph-type"> Random
+                            </label>
+                            <label class="btn btn-outline-primary active">
+                                <input type="radio" name="graph-type" id="ring-graph-type" checked> Ring
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <button id="generate-graph" class="btn btn-primary">Generate Graph</button>
                         <button id="run-layout" class="btn btn-success ml-2">Run Force Directed Layout</button>
                     </div>
                 </div>

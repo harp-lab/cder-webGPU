@@ -195,13 +195,24 @@ async function main() {
       ]
     }));
     
-    // Generate edges - create a connected graph
-    edges = [];
-    for (let i = 0; i < numNodes; i++) {
-      edges.push({
-        start: i,
-        end: (i + 1) % numNodes
-      });
+    if ((document.getElementById("random-graph-type") as HTMLInputElement).checked) {
+      // Create a random graph
+      edges = [];
+      for (let i = 0; i < numNodes; i++) {
+        edges.push({
+          start: i,
+          end: Math.floor(Math.random() * numNodes)
+        });
+      }
+    } else {
+      // Create a ring graph
+      edges = [];
+      for (let i = 0; i < numNodes; i++) {
+        edges.push({
+          start: i,
+          end: (i + 1) % numNodes
+        });
+      }
     }
     
     // Create node buffer
@@ -272,7 +283,7 @@ async function main() {
   
   // UI Controls setup
   function setupControls() {
-    document.getElementById('random-graph').addEventListener('click', () => {
+    document.getElementById('generate-graph').addEventListener('click', () => {
       startForces = false;
       generateRandomGraph();
     });
