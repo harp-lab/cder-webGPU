@@ -2,15 +2,6 @@ import shaderCode from "./matrixMulti.wgsl";
 import { quitIfWebGPUNotAvailable } from "./util";
 import TimestampQueryManager from "./TimestampQueryManager";
 
-// Initialize the matrices with random values
-function init_matrix(matrix: Uint32Array, width: number) {
-    for(let i = 0; i < width; i++) {
-        for(let j = 0; j < width; j++) {
-            matrix[i*width+j] = Math.floor(Math.random() * 5);
-        }
-    }
-}
-
 // Verify the matrix multiplication result
 function verify_result(M: Uint32Array, N: Uint32Array, P: Uint32Array, width: number) {
     for (let row = 0; row < width; row++) {
@@ -43,7 +34,7 @@ function printMatrix(matrix: Uint32Array, width: number, label: string) {
 }
 
 
-(async () => {
+export async function runWebGPUMultiplication(M: number[][], N: number[][]): Promise<number> {
     if (navigator.gpu === undefined) {
         document.getElementById("webgpu-canvas").setAttribute("style", "display:none;");
         document.getElementById("no-webgpu").setAttribute("style", "display:block;");
@@ -62,16 +53,10 @@ function printMatrix(matrix: Uint32Array, width: number, label: string) {
     quitIfWebGPUNotAvailable(adapter, device);
 
     const computePassDescriptor: GPUComputePassDescriptor = {};
-    const perfDisplay = document.querySelector('#info pre');
     const timestampQueryManager = new TimestampQueryManager(device, (elapsedNs) => {
         // Convert from nanoseconds to milliseconds:
         const elapsedMs = Number(elapsedNs) * 1e-6;
-        perfDisplay.innerHTML = `Compute Pass duration: ${elapsedMs.toFixed(6)} ms`;
     });
-
-    if (!supportsTimestampQueries) {
-        perfDisplay.innerHTML = 'Timestamp queries are not supported';
-    }
 
     // Setup shader modules
     var shaderModule = device.createShaderModule({code: shaderCode});
@@ -91,16 +76,14 @@ function printMatrix(matrix: Uint32Array, width: number, label: string) {
     }
 
     // Define the size of matrix
-    const Width = 512;
+    const Width = M.length;
     const matrixSize = Width * Width;
     const bufferSize = matrixSize * Uint32Array.BYTES_PER_ELEMENT;
 
     // Generate random M and N matrices
-    const h_M = new Uint32Array(matrixSize);
-    const h_N = new Uint32Array(matrixSize);
-    init_matrix(h_M, Width);
+    const h_M = new Uint32Array(M.flat());
+    const h_N = new Uint32Array(N.flat());
     // printMatrix(h_M, Width, "Matrix M");
-    init_matrix(h_N, Width);
     // printMatrix(h_N, Width, "Matrix N");
 
     // Allocate GPU memory for M, N, P, and Width
@@ -197,7 +180,9 @@ function printMatrix(matrix: Uint32Array, width: number, label: string) {
     device.queue.submit([commandEncoder.finish()]);
     await device.queue.onSubmittedWorkDone();
     await h_P.mapAsync(GPUMapMode.READ);
-    timestampQueryManager.tryInitiateTimestampDownload();
+    var elapsedNs = await timestampQueryManager.downloadTimestampResult();
+    elapsedNs = elapsedNs * 1e-6;
+    
 
     const result = new Uint32Array(h_P.getMappedRange());
 
@@ -206,4 +191,6 @@ function printMatrix(matrix: Uint32Array, width: number, label: string) {
 
     // Verify the result
     verify_result(h_M, h_N, result, Width);
-})();
+    
+    return elapsedNs;
+}
