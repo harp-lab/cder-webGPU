@@ -55,6 +55,11 @@ module.exports = {
         test: /\.tsx?$/,
         use: 'ts-loader',
         exclude: /node_modules/,
+      },
+      {
+        // Embed your WGSL files as strings
+        test: /\.wgsl$/i,
+        type: "asset/source",
       }
     ],
   },
@@ -160,7 +165,7 @@ Update the package.json file to include scripts for building and running the pro
 {
  "scripts": {
    "build": "webpack",
-   "start": "webpack serve --open"
+   "serve": "webpack server"
  }
 }
 ```
@@ -169,5 +174,5 @@ Update the package.json file to include scripts for building and running the pro
 With all configurations in place, we can now run the project:
 
 ```
-npm start
+npm run serve
 ```
