@@ -1,43 +1,63 @@
 import shaderCode from "./arrayMulti.wgsl";
 
 (async () => {
+    // Get the info element where we'll display results
+    const infoElement = document.querySelector("#info pre");
+    
     if (navigator.gpu === undefined) {
         document.getElementById("webgpu-canvas").setAttribute("style", "display:none;");
         document.getElementById("no-webgpu").setAttribute("style", "display:block;");
+        if (infoElement) {
+            infoElement.textContent = "WebGPU is not supported in your browser.";
+        }
         return;
     }
 
     // Check for WebGPU support
     if (!navigator.gpu) {
+        if (infoElement) {
+            infoElement.textContent = "WebGPU not supported on this browser.";
+        }
         throw new Error("WebGPU not supported on this browser.");
     }
 
     // Request an adapter
     const adapter = await navigator.gpu.requestAdapter();
     if (!adapter) {
+        if (infoElement) {
+            infoElement.textContent = "No appropriate GPU adapter found.";
+        }
         throw new Error("No appropriate GPU adapter found.");
     }
 
     // Request a device from the adapter
     const device = await adapter.requestDevice();
     
-    // Log success message
-    console.log("WebGPU device initialized successfully");
+    // Log success message to the page
+    if (infoElement) {
+        infoElement.textContent = "WebGPU device initialized successfully\n";
+    }
 
     // Setup shader modules
     var shaderModule = device.createShaderModule({code: shaderCode});
     var compilationInfo = await shaderModule.getCompilationInfo();
     if (compilationInfo.messages.length > 0) {
         var hadError = false;
-        console.log("Shader compilation log:");
+        let logMessage = "Shader compilation log:\n";
         for (var i = 0; i < compilationInfo.messages.length; ++i) {
             var msg = compilationInfo.messages[i];
-            console.log(`${msg.lineNum}:${msg.linePos} - ${msg.message}`);
+            logMessage += `${msg.lineNum}:${msg.linePos} - ${msg.message}\n`;
             hadError = hadError || msg.type == "error";
         }
         if (hadError) {
-            console.log("Shader failed to compile");
+            logMessage += "Shader failed to compile";
+            if (infoElement) {
+                infoElement.textContent += logMessage;
+            }
             return;
+        }
+        if (infoElement) {
+            infoElement.textContent += logMessage;
         }
     }
 
@@ -133,22 +153,40 @@ import shaderCode from "./arrayMulti.wgsl";
     const resultArrayBuffer = resultStagingBuffer.getMappedRange();
     const resultData = new Float32Array(resultArrayBuffer);
 
-    // Log some results to verify
-    console.log("Original data (first 10 values):", data.slice(0, 10));
-    console.log("Result data (first 10 values):", resultData.slice(0, 10));
-
+    // Create HTML content for displaying results
+    let resultHtml = "";
+    
+    // Add a heading for the input data
+    resultHtml += "Original data (first 10 values):\n";
+    // Display first 10 input values
+    for (let i = 0; i < 10; i++) {
+        resultHtml += `[${i}]: ${data[i]}\n`;
+    }
+    
+    // Add a heading for the output data
+    resultHtml += "\nResult data (first 10 values):\n";
+    // Display first 10 output values
+    for (let i = 0; i < 10; i++) {
+        resultHtml += `[${i}]: ${resultData[i]}\n`;
+    }
+    
     // Compare input and output to verify the operation
     let allCorrect = true;
     for (let i = 0; i < dataCount; i++) {
         if (resultData[i] !== data[i] * 2.0) {
-        console.error(`Mismatch at index ${i}: expected ${data[i] * 2.0}, got ${resultData[i]}`);
-        allCorrect = false;
-        break;
+            resultHtml += `\nMismatch at index ${i}: expected ${data[i] * 2.0}, got ${resultData[i]}\n`;
+            allCorrect = false;
+            break;
         }
     }
     
     if (allCorrect) {
-        console.log("Compute operation successful! All values correctly doubled.");
+        resultHtml += "\nCompute operation successful! All values correctly doubled.";
+    }
+    
+    // Update the info element with all results
+    if (infoElement) {
+        infoElement.textContent += resultHtml;
     }
 
     // Clean up
