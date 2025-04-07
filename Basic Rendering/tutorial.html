@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebGPU Rendering Pipeline Tutorial</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            line-height: 1.6;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            color: #333;
+        }
+        h1, h2, h3 {
+            color: #1a73e8;
+        }
+        pre {
+            background-color: #f5f5f5;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            margin: 20px 0;
+            font-family: 'Courier New', Courier, monospace;
+        }
+        code {
+            font-family: 'Courier New', Courier, monospace;
+            background-color: #f5f5f5;
+            padding: 2px 4px;
+            border-radius: 3px;
+        }
+        figure {
+            margin: 30px 0;
+            text-align: center;
+        }
+        img {
+            max-width: 100%;
+            height: auto;
+        }
+        figcaption {
+            font-style: italic;
+            margin-top: 10px;
+            color: #666;
+        }
+        .code-header {
+            background-color: #e0e0e0;
+            padding: 5px 15px;
+            border-radius: 5px 5px 0 0;
+            margin-bottom: -20px;
+            font-weight: bold;
+        }
+        .wgsl {
+            background-color: #2d2d2d;
+            color: #f8f8f2;
+        }
+        .typescript {
+            background-color: #f8f8f8;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <h1>Basic Rendering in WebGPU</h1>
+    <p>This tutorial demonstrates how to create a WebGPU application for GPU rendering of instanced triangles. </p>
+
+    <div class="note">
+        <p><strong>Note:</strong> This tutorial assumes some basic familiarity with WebGPU concepts like pipelines, shaders, buffers, and bind groups.</p>
+    </div>
+    
+    <p>The WebGPU rendering pipeline consists of two programmable stages: the vertex shader and the fragment shader, similar to WebGL. We show this pipeline in Figure 1.</p>
+    
+    <figure>
+        <img src="./webgl-triangle-pipeline.png" alt="The WebGPU rendering pipeline diagram">
+        <figcaption>Figure 1: The rendering pipeline in WebGPU consists of two programmable shader stages: the vertex shader, responsible for transforming input vertices into clip space, and the fragment shader, responsible for shading the pixels covered by each triangle. The vertex shader is called for each of the vertices of the primitives being rendered, while the fragment shader is called for each of the pixels rasterized after clipping and primitive assembly.</figcaption>
+    </figure>
+    
+    <p>To render on the GPU, we need to configure a render pipeline, specifying our shaders, render attributes, etc. In WebGPU, this pipeline takes the form of a concrete object, the GPURenderPipeline, which specifies the different pieces of the pipeline.</p>
+    
+    <p>Our first step in creating the pipeline is to create the vertex and fragment shader modules which will be executed in the pipeline.</p>
+    
+    <div class="code-header">WGSL</div>
+    <pre class="wgsl">@vertex
+fn vertexMain() -> VertexOutput {
+}
+
+@fragment
+fn fragmentMain(input: VertexOutput) -> @location(0) vec4f {
+}</pre>
+    
+    <p>The VertexOutput from the vertex shader is given as input to the fragment shader. The fragment shader uses this input (which interpolates values from the vertices for each pixel) to output a vector of four float32s as the RGBA color for each pixel it is called for.</p>
+    
+    <p>Before we can create a render pipeline, we also need to set up the output for rendering, which in most scenarios, will be to a canvas. This can be done by first configuring the render output to an HTML canvas context:</p>
+    
+    <div class="code-header">TypeScript</div>
+    <pre class="typescript">const canvas = document.getElementById("webgpu-canvas") as HTMLCanvasElement;
+const context = canvas.getContext("webgpu") as GPUCanvasContext;
+const format = navigator.gpu.getPreferredCanvasFormat();
+context.configure({
+    device,
+    format,
+});</pre>
+    
+    <p>Now we create the render pipeline, specifying the target of the fragment shader to be formatted for rendering to the canvas:</p>
+    
+    <div class="code-header">TypeScript</div>
+    <pre class="typescript">const pipeline = device.createRenderPipeline({
+    layout: device.createPipelineLayout({
+      bindGroupLayouts: [bindGroupLayout]
+    }),
+    vertex: {
+      module: shaderModule,
+      entryPoint: "vertexMain"
+    },
+    fragment: {
+      module: shaderModule,
+      entryPoint: "fragmentMain",
+      targets: [{ format }]
+    }
+});</pre>
+    
+    <h2>Your first triangle in WebGPU</h2>
+    
+    <p>To render a triangle in WebGPU, we need shader code for a triangle, along with enqueueing a render pass on the GPUDevice to call this shader code. Because we later want to extend this code to render many triangles, we'll write it in a way where it can be easily adapted:</p>
+    
+    <div class="code-header">WGSL</div>
+    <pre class="wgsl">struct VertexOutput {
+    @builtin(position) position: vec4f,
+    @location(0) color: vec4f,
+};
+@vertex
+fn vertexMain(@builtin(vertex_index) vertexIndex: u32) -> VertexOutput {
+    // Triangle vertices
+    var positions = array<vec2f, 3>(
+        vec2f(0.0, 0.1),
+        vec2f(-0.1, -0.1),
+        vec2f(0.1, -0.1)
+    );
+    var output: VertexOutput;
+    output.position = vec4f(positions[vertexIndex], 0.0, 1.0);
+    output.color = vec4f(1.0, 0.0, 0.0, 1.0);
+    return output;
+}
+
+@fragment
+fn fragmentMain(input: VertexOutput) -> @location(0) vec4f {
+    return input.color;
+}</pre>
+    
+    <p>Notice the builtin vertex index variable, which gives the vertex index of the given thread (either 0, 1, or 2 for a triangle). The vertex shader is called for every vertex in the list of primitives to render (in most cases triangles), so the positions here are defined to create a triangle with vertices at (0.0, 0.1), (-0.1, -0.1) and (0.1, -0.1). Because WebGPU defines vertices in clip space, where the center of the canvas is (0, 0), the bottom left corner is (-1, -1), and the top right corner is (1, 1), this creates a triangle in the center of the screen. The vertex shader sets each vertex to be colored red, so all pixels within the triangle will be red.</p>
+    
+    <p>To run this shader code on the GPU, we create a GPURenderPipeline as we did earlier, then use it to enqueue a Render Pass, which is described through a GPURenderPassDescriptor. The render pass descriptor specifies the images to bind that will be written to in the fragment shader. The color attachments must match the states specified for the render pipelines used in the render pass. Our fragment shader writes to a single output slot, the object color, which we'll write to the canvas using its context. The load and store operations are called before and after the render pass happens, so here we set them to clearing the canvas and storing the image respectively. We set the clear value to white to give a white background behind our triangle.</p>
+    
+    <div class="code-header">TypeScript</div>
+    <pre class="typescript">const commandEncoder = device.createCommandEncoder();
+const pass = commandEncoder.beginRenderPass({
+  colorAttachments: [{
+    view: context.getCurrentTexture().createView(),
+    loadOp: "clear",
+    storeOp: "store",
+    clearValue: { r: 1.0, g: 1.0, b: 1.0, a: 1.0 }
+  }]
+});
+
+pass.setPipeline(pipeline);
+pass.draw(3, 1); // 3 vertices per triangle
+pass.end();
+const commandBuffer = commandEncoder.finish();
+device.queue.submit([commandBuffer]);</pre>
+    
+    <p>We then create a command encoder to record our rendering commands. We begin the render pass by calling beginRenderPass and passing our render pass descriptor to get back a GPURenderPassEncoder that will allow us to record rendering commands. We can then set the render pipeline to use, draw the triangle, and end the render pass. The draw command takes two arguments, the number of vertices and the number of instances to draw, so we use three vertices and one instance to draw a single triangle. To get a command buffer which can be submitted to the GPU for execution, we call finish on the command encoder. The returned command buffer is then passed to the device for execution. After the command buffer is run, our triangle will be displayed on the canvas.</p>
+    
+    <h2>Instancing in render pipelines</h2>
+    
+    <p>In order to explore how SIMD operations can be used to accelerate graphics, this section will describe how the previous code can be extended for batched rendering of many triangles. The high-level idea is to create a buffer containing all the triangles we want to render, then adapt our draw call in the render pass to produce as many instances as we have triangles. Each of these instances will then access the buffer of triangles and render the index assigned to them. To do this, we edit our shader code as such:</p>
+    
+    <div class="code-header">WGSL</div>
+    <pre class="wgsl">struct Triangle {
+    pos: vec2f,
+    padding: vec2f,
+    color: vec4f,
+};
+struct VertexOutput {
+    @builtin(position) position: vec4f,
+    @location(0) color: vec4f,
+};
+@group(0) @binding(0) var<storage, read> triangles: array<Triangle>;
+@vertex fn vertexMain(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_index) instanceIndex: u32) -> VertexOutput {
+    var positions = array<vec2f, 3>(
+        vec2f(0.0, 0.1),
+        vec2f(-0.1, -0.1),
+        vec2f(0.1, -0.1)
+    );
+    var output: VertexOutput;
+    var worldPos = positions[vertexIndex] + triangles[instanceIndex].pos;
+    output.position = vec4f(positions[vertexIndex], 0.0, 1.0);
+    output.color = vec4f(triangles[instanceIndex].color, 0.0, 1.0);
+    return output;
+}
+
+@fragment fn fragmentMain(input: VertexOutput) -> @location(0) vec4f {
+    return input.color;
+}</pre>
+    
+    <p>For our input triangles to be seen in shader code, we bind a buffer of triangle structs, using a bind group as discussed earlier. This involves updating the render pipeline, but we omit this here for brevity. In the shader, we now use the builtin instance index to find which triangle is being rendered. We then compute the position of the thread's assigned vertex as its relative position plus the triangle's center position. We also give each triangle its own color, which is output to the fragment shader. Because structs in WebGPU Shading Language have to have their members aligned to 16 byte increments, we add padding between the 2-element position and 4-element color properties.</p>
+    
+    <p>Using this updated code, we can call our render pipeline for rendering many triangles by making the following simple changes:</p>
+    
+    <div class="code-header">TypeScript</div>
+    <pre class="typescript">pass.setPipeline(pipeline);
+pass.setBindGroup(0, bindGroup);
+pass.draw(3, triangles.length); // 3 vertices per triangle
+pass.end();
+
+device.queue.submit([commandEncoder.finish()]);</pre>
+    
+    <p>We set the bind group to be used for the render pass and change the draw call to render as many instances as we have triangles.</p>
+    
+    <h2>Building uniform buffers in WebGPU</h2>
+    
+    <p>The final step to build a simple rendering application is to add camera controls for moving and zooming the focus of the canvas. The implementation of this allows us to explore the use of uniform buffers. Uniform buffers are used instead of storage buffers whenever the data being transferred to the GPU is small, accessed by all threads uniformly, and only used for reading and not writing. To create a uniform buffer, we use the GPU device like before:</p>
+    
+    <div class="code-header">TypeScript</div>
+    <pre class="typescript">const cameraUniformBuffer = device.createBuffer({
+    size: 16, // Properly aligned size for 3 floats (x, y, zoom)
+    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+});</pre>
+    
+    <p>We can then add it to our bind group along with the triangles buffer like this:</p>
+    
+    <div class="code-header">TypeScript</div>
+    <pre class="typescript">const bindGroupLayout = device.createBindGroupLayout({
+    entries: [
+      {
+        binding: 0,
+        visibility: GPUShaderStage.VERTEX,
+        buffer: { type: "read-only-storage" }
+      },
+      {
+        binding: 1,
+        visibility: GPUShaderStage.VERTEX,
+        buffer: { type: "uniform" }
+      }
+    ]
+});
+const bindGroup = device.createBindGroup({
+    layout: bindGroupLayout,
+    entries: [
+      {
+        binding: 0,
+        resource: { buffer: triangleBuffer }
+      },
+      {
+        binding: 1,
+        resource: { buffer: cameraUniformBuffer }
+      }
+    ]
+});</pre>
+    
+    <p>With this uniform buffer, whenever the camera is changed by user interaction, we can update the data on the GPU with:</p>
+    
+    <div class="code-header">TypeScript</div>
+    <pre class="typescript">// Update camera uniforms
+function updateCameraUniform(): void {
+    device.queue.writeBuffer(
+      cameraUniformBuffer,
+      0,
+      new Float32Array([camera.x, camera.y, camera.zoom, 0.0]) // Add padding for alignment
+    );
+}</pre>
+    
+    <p>Importantly, because we already bound the cameraUniformBuffer to the render pipeline, any changes made to that buffer will automatically be reflected in our rendering. Finally, in order to use the camera in our shader code, we change the position of vertices by subtracting the camera's position and dividing by its zoom:</p>
+    
+    <div class="code-header">WGSL</div>
+    <pre class="wgsl">struct Camera {
+    position: vec2f,
+    zoom: f32,
+    padding: f32,
+};
+@group(0) @binding(0) var<storage, read> triangles: array<Triangle>;
+@group(0) @binding(1) var<uniform> camera: Camera;
+struct VertexOutput {
+    @builtin(position) position: vec4f,
+    @location(0) color: vec4f,
+};
+@vertex fn vertexMain(@builtin(vertex_index) vertexIndex: u32, 
+                @builtin(instance_index) instanceIndex: u32) -> VertexOutput {
+    var positions = array<vec2f, 3>(
+        vec2f(0.0, 0.1),
+        vec2f(-0.1, -0.1),
+        vec2f(0.1, -0.1)
+    );
+    var worldPos = positions[vertexIndex] + triangles[instanceIndex].pos;
+    var viewPos = (worldPos - camera.position) / camera.zoom;
+    var output: VertexOutput;
+    output.position = vec4f(viewPos, 0.0, 1.0);
+    output.color = triangles[instanceIndex].color;
+    return output;
+}
+@fragment fn fragmentMain(input: VertexOutput) -> @location(0) vec4f {
+    return input.color;
+}</pre>
+
+    <p>After moving the render code to a passively running loop, we now have a full interactive rendering application. This application, along with source code, is deployed at <a href="https://harp-lab.com/cder-webGPU/">https://harp-lab.com/cder-webGPU/</a>, and the original project is stored at <a href="https://github.com/harp-lab/cder-webGPU/tree/main/Basic%20Rendering">https://github.com/harp-lab/cder-webGPU/tree/main/Basic%20Rendering</a>.</p>
+</body>
+</html>

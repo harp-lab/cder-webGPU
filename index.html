@@ -244,6 +244,15 @@
             border: 1px solid #ced4da;
         }
         
+        /* Code Explainer Button Style */
+        .project-link.code-explainer {
+            background-color: #28a745;
+        }
+        
+        .project-link.code-explainer:hover {
+            background-color: #218838;
+        }
+        
         @media (max-width: 768px) {
             .mobile-toggle {
                 display: block;
@@ -295,10 +304,12 @@
     </nav>
     
     <div class="container content">
-        <h1>Welcome to WebGPU Modules</h1>
+        <h1>Understanding GPU Acceleration Using WebGPU</h1>
         <p>This is a central navigation page for WebGPU modules for the chapter 
             "Understanding GPU Acceleration Using WebGPU" in "Topics in Parallel and Distributed Computing:
-            From Concepts to the Classroom"</p>
+            From Concepts to the Classroom." While the modules can be used by themselves, it is recommended to progress through them in order, 
+            since some concepts explained in previous modules are taken for granted in later modules. For each module, you can visit the 
+            deployed application, see the source code directly here, or read an explainer on the most important parts of the code.</p>
         
         <div class="project-grid" id="projectGrid">
             <!-- Project cards will be dynamically added here -->
@@ -334,9 +345,10 @@
         // Project data with source files
         const projects = [
             {
-                name: "Array Multiplication",
-                description: "Example showing multiplication of an array by a scalar using a WebGPU compute pipeline",
+                name: "1) Basic Compute Pipeline",
+                description: "Example showing multiplication of an array by a scalar using a WebGPU compute pipeline. This module gives an in-depth explainer on the WebGPU device model and is recommended before any other module",
                 path: "Array Multiplication/dist/index.html",
+                tutorialPath: "Array Multiplication/tutorial.html",
                 sourceFiles: [
                     "app.ts",
                     "arrayMulti.wgsl",
@@ -345,9 +357,10 @@
                 basePath: "Array Multiplication/src/"
             },
             {
-                name: "Matrix Multiplication",
+                name: "2) Matrix Multiplication",
                 description: "Example showing matrix multiplication using a WebGPU compute pipeline, and time comparison with a Javascript implementation",
                 path: "Matrix Multiplication/dist/index.html",
+                tutorialPath: "Matrix Multiplication/tutorial.html",
                 sourceFiles: [
                     "app.ts",
                     "gpu-matrix.ts",
@@ -360,9 +373,10 @@
                 basePath: "Matrix Multiplication/src/"
             },
             {
-                name: "Basic Rendering",
+                name: "3) Basic Rendering",
                 description: "Example showing a basic rendering application displaying multiple triangles on a canvas using a WebGPU render pipeline",
                 path: "Basic Rendering/dist/index.html",
+                tutorialPath: "Basic Rendering/tutorial.html",
                 sourceFiles: [
                     "camera.ts",
                     "triangle.ts",
@@ -372,9 +386,10 @@
                 basePath: "Basic Rendering/src/"
             },
             {
-                name: "Graph Rendering",
+                name: "4) Graph Rendering",
                 description: "Example showing graph drawing with physically-based graph layout creation in a WebGPU compute pipeline and rendering in a WebGPU render pipeline",
                 path: "Graph Rendering/dist/index.html",
+                tutorialPath: "Graph Rendering/tutorial.html",
                 sourceFiles: [
                     "camera.ts",
                     "edge.wgsl",
@@ -443,10 +458,17 @@
                 openCodeViewer(project);
             });
             
+            // Add Code Explainer button
+            const codeExplainerLink = document.createElement('a');
+            codeExplainerLink.className = 'project-link code-explainer';
+            codeExplainerLink.href = project.tutorialPath;
+            codeExplainerLink.textContent = 'Explainer';
+            
             content.appendChild(title);
             content.appendChild(description);
             content.appendChild(link);
             content.appendChild(viewSourceLink);
+            content.appendChild(codeExplainerLink);
             card.appendChild(content);
             projectGrid.appendChild(card);
         });

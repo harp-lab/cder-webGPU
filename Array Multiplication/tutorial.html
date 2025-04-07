@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Basic Compute Pipeline in WebGPU</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h1, h2, h3 {
+            color: #2c3e50;
+        }
+        pre {
+            background-color: #f5f5f5;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+        code {
+            font-family: 'Consolas', 'Monaco', monospace;
+        }
+        .typescript-code {
+            background-color: #f8f8f8;
+            border-left: 4px solid #3178c6;
+        }
+        .wgsl-code {
+            background-color: #f8f8f8;
+            border-left: 4px solid #76b900;
+        }
+        .note {
+            background-color: #e7f5fe;
+            padding: 10px;
+            border-left: 4px solid #3498db;
+            margin: 15px 0;
+        }
+        .section {
+            margin-bottom: 30px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Basic Compute Pipeline in WebGPU</h1>
+    
+    <div class="section">
+        <p>
+            This tutorial explores the essential components of WebGPU's device model through a simple compute pipeline. 
+            We'll implement a simple parallel computation—multiplying each element of an array by 2—executed entirely on the GPU,
+            with results transferred back to the CPU.
+        </p>
+    </div>
+
+    <div class="section">
+        <h2>Introduction to the WebGPU Device Model</h2>
+        <p>
+            At the heart of WebGPU lies its carefully designed device model—an abstraction layer that establishes a consistent 
+            programming interface across diverse GPU hardware and operating systems. This model serves as the foundation for all 
+            WebGPU operations, enabling developers to write portable code while still accessing modern GPU capabilities.
+        </p>
+    </div>
+
+    <div class="section">
+        <h2>Step 1: Entry Point and Adapter</h2>
+        <p>
+            First, applications access the entry point through the <code>navigator.gpu</code> interface, which serves as the gateway 
+            to WebGPU functionality in the browser. Through this interface, the application requests an adapter, which identifies 
+            the current implementation of WebGPU, both in terms of the sourced backend and system being used.
+        </p>
+        <pre class="typescript-code"><code>// Entry point to WebGPU
+const gpu = navigator.gpu;
+
+// Check if WebGPU is supported
+if (!gpu) {
+  console.error("WebGPU is not supported on this browser.");
+  return;
+}
+
+// Request an adapter with specific preferences
+const adapter = await gpu.requestAdapter({
+  powerPreference: 'high-performance'
+});</code></pre>
+        <p>
+            The adapter exposes information about the GPU's capabilities, allowing applications to determine 
+            feature support before proceeding.
+        </p>
+    </div>
+
+    <div class="section">
+        <h2>Step 2: Requesting a Device</h2>
+        <p>
+            From the adapter, the application obtains a logical GPU device by specifying required features and limits. 
+            This device becomes the primary interface for creating and managing GPU resources throughout the application's lifecycle.
+        </p>
+        <pre class="typescript-code"><code>const device = await adapter.requestDevice();</code></pre>
+        <p>
+            Each device has a single associated command queue, which executes command buffers submitted by the application. 
+            This queue-based approach allows for efficient batch processing of graphics and compute operations.
+        </p>
+    </div>
+
+    <div class="section">
+        <h2>Step 3: Creating Buffers</h2>
+        <p>
+            WebGPU's resource management system operates through the device interface. Applications create buffers for storing 
+            linear data, textures for image data, bind groups for organizing resources, and pipeline state objects that 
+            encapsulate rendering or compute operations.
+        </p>
+        <pre class="typescript-code"><code>// Create an input buffer with some data
+const inputBuffer = device.createBuffer({
+  size: data.byteLength,
+  usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+});
+device.queue.writeBuffer(inputBuffer, 0, data);
+
+// Create an output buffer to store results
+const outputBuffer = device.createBuffer({
+  size: data.byteLength,
+  usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+});</code></pre>
+        <p>
+            These resources are explicitly created, managed, and destroyed through the device, giving developers 
+            precise control over memory usage.
+        </p>
+    </div>
+
+    <div class="section">
+        <h2>Step 4: Bind Groups and Layouts</h2>
+        <p>
+            <code>Bind groups</code> and <code>bind group layouts</code> provide a structured mechanism for organizing resources
+            (like the storage buffers created above) and making them accessible to shader code that runs on the GPU.
+        </p>
+        <pre class="typescript-code"><code>const bindGroupLayout = device.createBindGroupLayout({
+  entries: [
+    {
+      binding: 0,                          // Binding slot number referenced in shader
+      visibility: GPUShaderStage.COMPUTE,  // Which shader stages can access this resource
+      buffer: { type: 'storage' }          // This is a storage buffer
+    },
+    {
+      binding: 1,
+      visibility: GPUShaderStage.COMPUTE,
+      buffer: { type: 'storage' }
+    }
+  ]
+});</code></pre>
+        <p>
+            This layout specifies that:
+        </p>
+        <ul>
+            <li>Binding slot 0 will contain a storage buffer accessible from compute shaders</li>
+            <li>Binding slot 1 will contain another storage buffer also accessible from compute shaders</li>
+        </ul>
+        <p>
+            These binding numbers correspond directly to the <code>@binding(0)</code> and <code>@binding(1)</code> decorators in the WGSL shader code:
+        </p>
+        <pre class="wgsl-code"><code>@group(0) @binding(0) var<storage, read> input: array<f32>;
+@group(0) @binding(1) var<storage, write> output: array<f32>;</code></pre>
+        <p>
+            While the bind group layout defines the interface, a bind group provides the actual implementation 
+            by connecting specific resource objects to the binding slots defined in the layout:
+        </p>
+        <pre class="typescript-code"><code>const bindGroup = device.createBindGroup({
+  layout: bindGroupLayout,         // Use the layout we defined
+  entries: [
+    {
+      binding: 0,                    // Connect to binding slot 0
+      resource: { buffer: inputBuffer }//Attach our input buffer
+    },
+    {
+      binding: 1,                    // Connect to binding slot 1
+      resource: { buffer: outputBuffer }//Attach our output buffer
+    }
+  ]
+});</code></pre>
+    </div>
+
+    <div class="section">
+        <h2>Step 5: Creating a Compute Shader</h2>
+        <p>
+            Next, we create the compute shader - the actual code that runs on the GPU. The compute shader in our 
+            example performs a straightforward parallel data transformation on a buffer of floating-point values.
+        </p>
+        <pre class="typescript-code"><code>const shaderModule = device.createShaderModule({
+  code: `
+    @group(0) @binding(0) var<storage, read> input: array<f32>;
+    @group(0) @binding(1) var<storage, write> output: array<f32>;
+    
+    @compute @workgroup_size(64)
+    fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
+      let index = global_id.x;
+      
+      // Simple computation: double each value
+      if (index < arrayLength(&input)) {
+        output[index] = input[index] * 2.0;
+      }
+    }
+  `
+});</code></pre>
+        <p>
+            At its core, the shader executes a simple operation: it reads values from an input array and writes each 
+            value multiplied by 2.0 to a corresponding position in an output array. The shader is organized to run in parallel 
+            across multiple threads (or invocations), with each thread responsible for processing a single element of the array.
+        </p>
+        <div class="note">
+            <p>
+                When the shader is dispatched, it creates a grid of worker threads, each identified by a unique 
+                <code>global_invocation_id</code>. Each thread uses its ID as an index to access the correct element in the arrays. 
+                This parallelization is what makes GPU computing powerful—instead of processing the array elements one after 
+                another as in CPU code, the GPU processes many elements simultaneously across its many cores.
+            </p>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>Step 6: Creating a Compute Pipeline</h2>
+        <p>
+            The compute pipeline represents a critical component in WebGPU's architecture, serving as the compiled 
+            and optimized execution plan for GPU compute operations.
+        </p>
+        <pre class="typescript-code"><code>const computePipeline = device.createComputePipeline({
+  layout: device.createPipelineLayout({
+      bindGroupLayouts: [bindGroupLayout]
+  }),
+  compute: {
+    module: shaderModule,
+    entryPoint: 'main'
+  }
+});</code></pre>
+    </div>
+
+    <div class="section">
+        <h2>Step 7: Command Encoding</h2>
+        <p>
+            Command encoding refers to the process of recording a sequence of GPU commands into a command buffer before execution. 
+            Rather than executing each command immediately (as in older APIs like WebGL), WebGPU collects commands into bundles 
+            that can be validated and optimized as a group.
+        </p>
+        <pre class="typescript-code"><code>// Create a command encoder
+const commandEncoder = device.createCommandEncoder();</code></pre>
+        <p>
+            Using our command encoder, we begin a compute pass, which represents a sequence of compute operations:
+        </p>
+        <pre class="typescript-code"><code>// Begin a compute pass
+const computePass = commandEncoder.beginComputePass();
+
+// Set the compute pipeline
+computePass.setPipeline(computePipeline);
+
+// Set the bind group containing our buffers and other resources
+computePass.setBindGroup(0, bindGroup);
+
+// Dispatch the compute work
+// Parameters: (workgroupCountX, workgroupCountY, workgroupCountZ)
+computePass.dispatchWorkgroups(
+  Math.ceil(dataSize / 64), // X dimension
+  1,                        // Y dimension
+  1                         // Z dimension
+);
+
+// End the compute pass
+computePass.end();</code></pre>
+        <p>
+            Within this pass, we set our compute pipeline and bind group, preparing for the dispatch of our workgroups. 
+            We calculate the appropriate workgroup count by dividing our data size by the workgroup size (with rounding up 
+            to ensure all data is processed) and then dispatch the workgroups with <code>dispatchWorkgroups()</code>.
+        </p>
+    </div>
+
+    <div class="section">
+        <h2>Step 8: Submitting Commands to the GPU</h2>
+        <p>
+            With all our commands recorded, we finish the command encoder to create a command buffer and submit it to the 
+            device's queue for execution.
+        </p>
+        <pre class="typescript-code"><code>// Finish encoding and get the command buffer
+const commandBuffer = commandEncoder.finish();
+
+// Submit the command buffer to the GPU queue for execution
+device.queue.submit([commandBuffer]);</code></pre>
+        <p>
+            This submission triggers the actual GPU execution of our recorded commands—our shader runs, the computation is 
+            performed in parallel across all dispatched threads, and the results are written to the output buffer. 
+            The queue submission is asynchronous, meaning it returns immediately while the GPU begins processing the commands.
+        </p>
+    </div>
+
+    <div class="section">
+        <p>
+            This tutorial explained the WebGPU device model by using a simple array multiplication application. 
+            This application, along with source code, is deployed at <a href="https://harp-lab.com/cder-webGPU/">https://harp-lab.com/cder-webGPU/</a>, and the original project is stored at <a href="https://github.com/harp-lab/cder-webGPU/tree/main/Array%20Multiplication">https://github.com/harp-lab/cder-webGPU/tree/main/Array%20Multiplication
+        </p>
+    </div>
+</body>
+</html>

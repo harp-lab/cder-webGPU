@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Matrix Multiplication with WebGPU</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            color: #333;
+        }
+        h1, h2, h3 {
+            color: #2c3e50;
+        }
+        pre {
+            background-color: #f5f5f5;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            border-left: 4px solid #3498db;
+        }
+        code {
+            font-family: 'Courier New', Courier, monospace;
+        }
+        .code-container {
+            position: relative;
+            margin: 20px 0;
+        }
+        .line-numbers {
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 40px;
+            padding: 15px 0;
+            text-align: right;
+            background-color: #e0e0e0;
+            color: #777;
+            border-radius: 5px 0 0 5px;
+            user-select: none;
+        }
+        .line-numbers span {
+            display: block;
+            padding-right: 10px;
+        }
+        .code-with-numbers {
+            padding-left: 50px !important;
+        }
+        .math {
+            font-style: italic;
+        }
+        .highlight {
+            background-color: #fff3cd;
+            padding: 2px;
+        }
+        .note {
+            background-color: #e7f5fe;
+            border-left: 4px solid #3498db;
+            padding: 10px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Matrix Multiplication with WebGPU</h1>
+    
+    <p>
+        This tutorial will show you how to create an application for GPU-accelerated matrix multiplication using WebGPU.
+    </p>
+
+    <h2>Mathematical Background</h2>
+    <p>
+        When we multiply an <span class="math">i×j</span> matrix <span class="math">M</span> (i rows by j columns) with a 
+        <span class="math">j×k</span> matrix <span class="math">N</span>, we produce an <span class="math">i×k</span> matrix <span class="math">P</span>.
+    </p>
+    <p>
+        In matrix multiplication, each element of the output matrix <span class="math">P</span> is derived from the inner product of a row 
+        from matrix <span class="math">M</span> and a column from matrix <span class="math">N</span>.
+    </p>
+
+    <h2>Implementation with WebGPU</h2>
+    <p>
+        To implement matrix multiplication using WebGPU, we can map GPU threads to the elements of the output matrix <span class="math">P</span>, 
+        so that each thread calculates a single element. When we dispatch threads in the x and y dimensions to cover the rows and columns 
+        of <span class="math">P</span>, we can get the indices for each element as follows:
+    </p>
+
+    <pre><code>let row = global_id.y;
+let col = global_id.x;</code></pre>
+
+    <h3>The Matrix Multiplication Compute Shader</h3>
+    <p>
+        Below is a complete compute shader for matrix multiplication. In this example, we work with square matrices 
+        that are flattened into single-dimensional arrays in row-major order.
+    </p>
+
+    <div class="code-container">
+        <div class="line-numbers">
+            <span>1</span>
+            <span>2</span>
+            <span>3</span>
+            <span>4</span>
+            <span>5</span>
+            <span>6</span>
+            <span>7</span>
+            <span>8</span>
+            <span>9</span>
+            <span>10</span>
+            <span>11</span>
+            <span>12</span>
+            <span>13</span>
+            <span>14</span>
+            <span>15</span>
+            <span>16</span>
+            <span>17</span>
+            <span>18</span>
+            <span>19</span>
+        </div>
+        <pre class="code-with-numbers"><code>@group(0) @binding(0) var&lt;storage, read&gt; M: array&lt;u32&gt;;
+@group(0) @binding(1) var&lt;storage, read&gt; N: array&lt;u32&gt;;
+@group(0) @binding(2) var&lt;storage, read_write&gt; P: array&lt;u32&gt;;
+@group(0) @binding(3) var&lt;storage, read&gt; Width: u32;
+
+@compute @workgroup_size(16, 16)
+fn main(@builtin(global_invocation_id) global_id: vec3&lt;u32&gt;) {
+    let row = global_id.y;
+    let col = global_id.x;
+    if((row < Width) && (col < Width)) {
+        var Pvalue: u32 = 0;
+        for(var i: u32 = 0u; i < Width; i++) {
+            let m = M[row * Width + i];
+            let n = N[i * Width + col];
+            Pvalue = Pvalue + m * n;
+        }
+        P[row * Width + col] = Pvalue;
+    }
+}</code></pre>
+    </div>
+
+    <h3>Understanding the Shader Code</h3>
+    <p>
+        Let's break down the shader code:
+    </p>
+    <ol>
+        <li>
+            <strong>Lines 1-4:</strong> We declare storage buffers to hold our input and output data:
+            <ul>
+                <li><span class="highlight">M</span>: A read-only storage buffer containing the first input matrix as an array of 32-bit unsigned integers.</li>
+                <li><span class="highlight">N</span>: A read-only storage buffer for the second input matrix.</li>
+                <li><span class="highlight">P</span>: A read-write storage buffer for the output matrix.</li>
+                <li><span class="highlight">Width</span>: A scalar value that stores the dimension of our square matrices.</li>
+            </ul>
+        </li>
+        <li>
+            <strong>Line 6:</strong> The <code>@workgroup_size(16, 16)</code> directive specifies that each workgroup for this shader consists of 16×16 threads.
+        </li>
+        <li>
+            <strong>Line 10:</strong> We check if the current thread's position is within the matrix dimensions. This is necessary because we might dispatch more threads than needed if the matrix dimensions aren't divisible by the workgroup size.
+        </li>
+        <li>
+            <strong>Lines 11-16:</strong> This is where the actual matrix multiplication happens:
+            <ul>
+                <li>We initialize <code>Pvalue</code> to 0.</li>
+                <li>For each position <code>i</code> in the row of M and column of N, we multiply the corresponding elements and add to <code>Pvalue</code>.</li>
+            </ul>
+        </li>
+        <li>
+            <strong>Line 17:</strong> Finally, we store the calculated value in the output matrix P.
+        </li>
+    </ol>
+
+    <div class="note">
+        <p><strong>Note:</strong> In this tutorial, we only work with square matrices for simplicity. The approach can be extended to non-square matrices by using separate width and height parameters.</p>
+    </div>
+
+    <h2>Setting Up the Compute Pipeline</h2>
+    <p>
+        After writing the compute shader, we need to set up a compute pipeline to execute it. The following TypeScript code shows how to create a pipeline layout and compute pipeline:
+    </p>
+
+    <pre><code>const bindGroupLayout = device.createBindGroupLayout({
+    entries: [
+        {binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: {type: "read-only-storage" as GPUBufferBindingType}},  // M
+        {binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: {type: "read-only-storage" as GPUBufferBindingType}},  // N
+        {binding: 2, visibility: GPUShaderStage.COMPUTE, buffer: {type: "storage" as GPUBufferBindingType}},            // P
+        {binding: 3, visibility: GPUShaderStage.COMPUTE, buffer: {type: "read-only-storage" as GPUBufferBindingType}},  // Width
+    ]
+});
+
+const bindGroup = device.createBindGroup({
+    layout: bindGroupLayout,
+    entries: [
+        {binding: 0, resource: {buffer: d_M}},
+        {binding: 1, resource: {buffer: d_N}},
+        {binding: 2, resource: {buffer: d_P}},
+        {binding: 3, resource: {buffer: d_Width}}
+    ]
+});
+
+const computePipeline = device.createComputePipeline({
+    layout: device.createPipelineLayout({
+        bindGroupLayouts: [bindGroupLayout],
+    }),
+    compute: {
+        module: device.createShaderModule({code: shaderCode}),
+        entryPoint: "main",
+    },
+});</code></pre>
+
+    <h2>Dispatching Compute Commands</h2>
+    <p>
+        With the compute pipeline and bind group established, we can now encode and dispatch compute commands:
+    </p>
+
+    <pre><code>const commandEncoder = device.createCommandEncoder();
+const pass = commandEncoder.beginComputePass();
+pass.setPipeline(computePipeline);
+pass.setBindGroup(0, bindGroup);
+pass.dispatchWorkgroups(Math.ceil(Width / 16), Math.ceil(Width / 16));
+pass.end();</code></pre>
+
+    <p>
+        Since our workgroups are of size 16×16, the <code>dispatchWorkgroups</code> call needs to be passed the total workload divided by 16 in each dimension to create the correct number of threads.
+    </p>
+
+    <h2>Submitting Commands to the GPU</h2>
+    <p>
+        Finally, we submit the encoded commands to the GPU queue to execute the computation in parallel, utilizing WebGPU's capabilities for efficient matrix multiplication.
+    </p>
+    
+    <p>This tutorial demonstrated how to build an application for GPU-accelerated matrix multiplication using WebGPU's compute capabilities. This application, along with source code, is deployed at <a href="https://harp-lab.com/cder-webGPU/">https://harp-lab.com/cder-webGPU/</a>, and the original project is stored at <a href="https://github.com/harp-lab/cder-webGPU/tree/main/Matrix%20Multiplication">https://github.com/harp-lab/cder-webGPU/tree/main/Matrix%20Multiplication</a>.</p></p>
+    <p>In the deployed application, we support custom matrix multiplication operations, as well as time the GPU-accelerated matrix multiplication against a native
+        CPU-based Typescript implementation. This helps to show the immense speedup that GPUs offer for GPGPU applications.
+    </p>
+
+</body>
+</html>

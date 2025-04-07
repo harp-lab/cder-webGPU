@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebGPU Graph Visualization Tutorial</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            color: #333;
+        }
+        h1, h2, h3 {
+            color: #2c3e50;
+        }
+        pre {
+            background-color: #f5f5f5;
+            border-radius: 5px;
+            padding: 15px;
+            overflow-x: auto;
+        }
+        code {
+            font-family: 'Consolas', 'Courier New', monospace;
+        }
+        .note {
+            background-color: #e7f5fe;
+            border-left: 4px solid #2196F3;
+            padding: 10px 15px;
+            margin: 20px 0;
+        }
+        img {
+            max-width: 100%;
+            display: block;
+            margin: 20px auto;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Graph Rendering with WebGPU</h1>
+    
+    <p>This tutorial demonstrates how to create a WebGPU application that combines GPU compute and rendering to visualize graphs. We'll implement a force-directed graph layout algorithm that runs entirely on the GPU while rendering the result in real-time.</p>
+
+    <div class="note">
+        <p><strong>Note:</strong> This tutorial assumes basic familiarity with WebGPU concepts, along with implementing rendering and computing on the GPU.</p>
+    </div>
+
+    <h2>1. Rendering Graph Nodes</h2>
+    
+    <p>Let's start with rendering the nodes of our graph. We'll represent each node as a circle, which we'll implement by creating a square and then discarding fragments outside the circle boundary.</p>
+
+    <h3>Node Rendering Shader</h3>
+    <p>Here's the WGSL shader code for rendering nodes:</p>
+    
+    <pre><code>struct VertexOutput {
+    @builtin(position) position: vec4f,
+    @location(0) color: vec4f,
+    @location(1) @interpolate(flat) center: vec2f,
+    @location(2) pos: vec2f
+};
+@group(0) @binding(0) var<storage, read> nodes: array<Node>;
+@group(0) @binding(1) var<storage, read> edges: array<Edge>;
+@group(0) @binding(2) var<uniform> camera: Camera;
+
+@vertex 
+fn vertexMain(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_index) instanceIndex: u32) -> VertexOutput {
+    // Node vertices (square centered at origin)
+    var positions = array<vec2f, 6>(
+        vec2f(-0.02, -0.02),
+        vec2f(0.02, -0.02),
+        vec2f(0.02, 0.02),
+        vec2f(-0.02, 0.02),
+        vec2f(-0.02, -0.02),
+        vec2f(0.02, 0.02)
+    );
+    var worldPos = positions[vertexIndex] + nodes[instanceIndex].pos;
+    var viewPos = (worldPos - camera.position) / camera.zoom;
+    var output: VertexOutput;
+    output.position = vec4f(viewPos, 0.0, 1.0);
+    output.color = nodes[instanceIndex].color;
+    output.pos = worldPos;
+    output.center = nodes[instanceIndex].pos;
+    return output;
+} 
+
+@fragment fn fragmentMain(input: VertexOutput) -> @location(0) vec4f {
+    if (distance(input.pos, input.center) > 0.02) {
+        discard;
+    }
+    return input.color;
+}</code></pre>
+
+    <p>Let's break down what's happening in this shader:</p>
+    <ul>
+        <li>The vertex shader creates a square for each node by defining 6 vertices (two triangles)</li>
+        <li>We use instancing to render one square per node, offsetting each by the node's position</li>
+        <li>We pass both the node center and the actual vertex position to the fragment shader</li>
+        <li>The fragment shader discards any pixels that are outside our circle radius (0.02)</li>
+        <li>The <code>@interpolate(flat)</code> annotation on the center ensures it doesn't get interpolated across the fragments</li>
+    </ul>
+
+    <p>And the Typescript code for creating the render pipeline:</p>
+    <div class="code-header">TypeScript</div>
+    <pre class="typescript">const pipeline = device.createRenderPipeline({
+    layout: device.createPipelineLayout({
+      bindGroupLayouts: [bindGroupLayout]
+    }),
+    vertex: {
+      module: shaderModule,
+      entryPoint: "vertexMain"
+    },
+    fragment: {
+      module: shaderModule,
+      entryPoint: "fragmentMain",
+      targets: [{ format }]
+    });</pre>
+
+    <h2>2. Rendering Graph Edges</h2>
+    
+    <p>Next, we need to render the edges connecting our nodes. This requires a separate pipeline configured to render lines instead of triangles.</p>
+
+    <h3>Edge Pipeline Configuration</h3>
+    <p>First, we'll create a render pipeline specifically for edges:</p>
+    
+    <pre><code>const edgePipeline = device.createRenderPipeline({
+    // Other properties are same as before...
+    primitive: {
+      topology: "line-list"
+    }
+});</code></pre>
+
+    <p>The key difference is the <code>topology: "line-list"</code> property, which tells WebGPU to render lines instead of triangles.</p>
+
+    <h3>Edge Rendering Shader</h3>
+    <p>Here's the shader code for rendering edges:</p>
+    
+    <pre><code>struct Edge {
+    start: u32,
+    end: u32,
+    padding: vec2u
+}
+
+@group(0) @binding(0) var<storage, read> nodes: array<Node>;
+@group(0) @binding(1) var<storage, read> edges: array<Edge>;
+@group(0) @binding(2) var<uniform> camera: Camera;
+
+struct VertexOutput {
+    @builtin(position) position: vec4f,
+    @location(0) color: vec4f
+};
+
+@vertex 
+fn vertexMain(@builtin(vertex_index) vertexIndex: u32, 
+                @builtin(instance_index) instanceIndex: u32) -> VertexOutput {
+    var node = Node();
+    if (vertexIndex == 0) {
+        node = nodes[edges[instanceIndex].start];
+    } else {
+        node = nodes[edges[instanceIndex].end];
+    }
+    var viewPos = (node.pos - camera.position) / camera.zoom;
+    var output: VertexOutput;
+    output.position = vec4f(viewPos, 1.0, 1.0);
+    output.color = node.color;
+    return output;
+}
+
+@fragment fn fragmentMain(input: VertexOutput) -> @location(0) vec4f {
+    return input.color;
+}</code></pre>
+
+    <p>This shader:</p>
+    <ul>
+        <li>Takes an array of edges, where each edge specifies start and end node indices</li>
+        <li>Uses the vertex index (0 or 1) to determine whether to use the start or end node position</li>
+        <li>The fragment shader simply outputs the interpolated color between the two connected nodes</li>
+    </ul>
+
+    <h3>Drawing the Graph</h3>
+    <p>With both pipelines set up, we can now draw our graph:</p>
+    
+    <pre><code>// Create pass...
+pass.setPipeline(nodePipeline);
+pass.setBindGroup(0, bindGroup);
+pass.draw(6, nodes.length);  // 6 vertices per node
+
+pass.setPipeline(edgePipeline);
+pass.setBindGroup(0, bindGroup);
+pass.draw(2, edges.length);  // 2 vertices per edge
+// End and submit pass...</code></pre>
+
+    <h2>3. Implementing Force-Directed Graph Layout</h2>
+    
+    <p>Now, let's implement a force-directed layout algorithm that runs on the GPU. This will automatically arrange our nodes to create a visually appealing graph layout.</p>
+
+    <div class="note">
+        <p>Force-directed layouts apply attractive forces between connected nodes and repulsive forces between all nodes, eventually reaching a balanced state that reveals the graph structure.</p>
+    </div>
+
+    <h3>Adjacency Matrix</h3>
+    <p>To efficiently determine which nodes are connected, we'll use an adjacency matrix:</p>
+    
+    <pre><code>// Create adjacency matrix (flat array of u32)
+const adjacencyMatrix = new Uint32Array(nodeCount * nodeCount);
+for (const edge of edges) {
+    adjacencyMatrix[edge.start * nodeCount + edge.end] = 1;
+    adjacencyMatrix[edge.end * nodeCount + edge.start] = 1; // For undirected graphs
+}
+
+// Create and write to buffer
+const adjacencyMatrixBuffer = device.createBuffer({
+    size: adjacencyMatrix.byteLength,
+    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+});
+device.queue.writeBuffer(adjacencyMatrixBuffer, 0, adjacencyMatrix);</code></pre>
+
+    <h3>Force Calculation Compute Shader</h3>
+    <p>Here's the compute shader that calculates forces and updates node positions:</p>
+    
+    <pre><code>struct Uniforms {
+    nodes_length : u32,
+    cooling_factor : f32,
+    ideal_length : f32,
+    padding : u32
+};
+
+@group(0) @binding(0) var<storage, read_write> nodes:array<Node>;
+@group(0) @binding(1) var<storage, read> adj_matrix:array<u32>;
+@group(0) @binding(2) var<uniform> uniforms : Uniforms;
+
+@compute @workgroup_size(64, 1, 1)
+fn main(@builtin(global_invocation_id) global_id : vec3<u32>) {
+    let l = uniforms.ideal_length;
+    let node = nodes[global_id.x];
+    var force : vec2<f32> = vec2<f32>(0.0, 0.0);
+    
+    for (var i : u32 = 0u; i < uniforms.nodes_length; i = i + 1u) {
+        if (i == global_id.x) { continue; }
+        
+        var node2 = nodes[i];
+        var dist : f32 = distance(node.pos, node2.pos);
+        
+        if (adj_matrix[i * uniforms.nodes_length + global_id.x]){
+            // Attractive force (connected nodes)
+            var dir = normalize(node2.pos - node.pos);
+            force += ((dist * dist) / l) * dir;
+        } else {
+            // Repulsive force (disconnected nodes)
+            var dir = normalize(node.pos - node2.pos);
+            force += ((l * l) / dist) * dir;
+        }
+    }
+    
+    force = normalize(force) * uniforms.cooling_factor;
+    nodes[global_id.x].pos += force;
+}</code></pre>
+
+    <p>This compute shader:</p>
+    <ul>
+        <li>Runs one thread per node (using the global invocation ID to identify which node)</li>
+        <li>Calculates attractive forces between connected nodes and repulsive forces between unconnected nodes</li>
+        <li>Uses the adjacency matrix to efficiently check if two nodes are connected</li>
+        <li>Applies a cooling factor to gradually reduce movement and help the layout converge</li>
+        <li>Directly updates the node positions in the shared buffer</li>
+    </ul>
+
+    <h3>Creating the Compute Pipeline</h3>
+    
+    <pre><code>computePipeline = device.createComputePipeline({
+    layout: "auto",
+    compute: {
+        module: device.createShaderModule({
+            code: forces
+        }),
+        entryPoint: "main",
+    },
+});
+
+computeBindGroup = device.createBindGroup({
+    layout: computePipeline.getBindGroupLayout(0),
+    entries: [
+        {
+            binding: 0,
+            resource: {
+                buffer: nodebuffer,
+            }
+        },
+        {
+            binding: 1,
+            resource: {
+                buffer: adjacencyMatrixBuffer,
+            }
+        },
+        {
+            binding: 2,
+            resource: {
+                buffer: uniformBuffer,
+            },
+        }
+    ]
+});</code></pre>
+
+    <p>Note the use of <code>layout: "auto"</code> which lets WebGPU automatically determine the bind group layout from the shader.</p>
+
+    <h2>4. Combining Everything in a Render Loop</h2>
+    
+    <p>Finally, we'll create a render loop that runs both the compute and render passes in sequence:</p>
+    
+    <pre><code>function render() {
+    const commandEncoder = device.createCommandEncoder();
+    
+    // Run force-directed layout step
+    const computePass = commandEncoder.beginComputePass();
+    computePass.setBindGroup(0, computeBindGroup);
+    computePass.setPipeline(computePipeline);
+    computePass.dispatchWorkgroups(Math.ceil(nodeCount/64), 1, 1);
+    computePass.end();
+    
+    // Reduce cooling factor for convergence
+    coolingFactor = coolingFactor * 0.99;
+    device.queue.writeBuffer(uniformBuffer, 4, new Float32Array([coolingFactor]), 0, 1);
+    
+    // Render the graph
+    const renderPass = commandEncoder.beginRenderPass({
+        colorAttachments: [{
+            view: context.getCurrentTexture().createView(),
+            loadOp: "clear",
+            clearValue: { r: 0.1, g: 0.1, b: 0.1, a: 1.0 },
+            storeOp: "store",
+        }]
+    });
+    
+    renderPass.setPipeline(nodePipeline);
+    renderPass.setBindGroup(0, bindGroup);
+    renderPass.draw(6, nodes.length);
+    
+    renderPass.setPipeline(edgePipeline);
+    renderPass.setBindGroup(0, bindGroup);
+    renderPass.draw(2, edges.length);
+    
+    renderPass.end();
+    
+    device.queue.submit([commandEncoder.finish()]);
+    requestAnimationFrame(render);
+}</code></pre>
+
+    <p>This function:</p>
+    <ul>
+        <li>Creates a command encoder to encode both compute and render operations</li>
+        <li>Runs the force calculation compute shader first</li>
+        <li>Gradually reduces the cooling factor to help the layout converge</li>
+        <li>Renders the nodes and edges with their updated positions</li>
+        <li>Submits all commands to the GPU</li>
+        <li>Requests the next animation frame to continue the loop</li>
+    </ul>
+
+    <p>The benefit of this approach is that we're using the same node buffer for both the compute and render passes. The compute shader updates the node positions directly in the buffer, and the render pipelines use those updated positions without any data transfer between the CPU and GPU.</p>
+    
+    <p>This tutorial demonstrated how to build an interactive graph visualization application using WebGPU's compute and render capabilities. This application, along with source code, is deployed at <a href="https://harp-lab.com/cder-webGPU/">https://harp-lab.com/cder-webGPU/</a>, and the original project is stored at <a href="https://github.com/harp-lab/cder-webGPU/tree/main/Graph%20Rendering">https://github.com/harp-lab/cder-webGPU/tree/main/Graph%20Rendering</a>.</p></p>
+    <p>In our deployed application, we offer an interactive application where one can explore the visualized graphs with camera controls,
+        change options regarding the force-directed algorithm and size/structure of input graphs, and rerun the algorithm and graph generation
+        as many times as desired.
+    </p>
+</body>
+</html>
