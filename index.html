@@ -3,7 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Module Navigation</title>
+    <title>WebGPU Modules</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/github.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/languages/typescript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/languages/wgsl.min.js"></script>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -111,6 +115,8 @@
             text-decoration: none;
             font-weight: 500;
             transition: background-color 0.3s;
+            margin-right: 10px;
+            margin-bottom: 10px;
         }
         
         .project-link:hover {
@@ -124,6 +130,118 @@
             color: #fff;
             font-size: 1.5rem;
             cursor: pointer;
+        }
+        
+        /* Code Viewer Styles */
+        .code-viewer-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+        }
+        
+        .code-viewer-container {
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+            width: 90%;
+            max-width: 1200px;
+            height: 90%;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        
+        .code-viewer-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem;
+            background-color: #f1f3f5;
+            border-bottom: 1px solid #dee2e6;
+        }
+        
+        .code-viewer-title {
+            font-size: 1.25rem;
+            font-weight: bold;
+            margin: 0;
+        }
+        
+        .code-viewer-close {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #495057;
+        }
+        
+        .code-viewer-sidebar {
+            width: 250px;
+            background-color: #f8f9fa;
+            border-right: 1px solid #dee2e6;
+            overflow-y: auto;
+            flex-shrink: 0;
+        }
+        
+        .file-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .file-list-item {
+            padding: 0.75rem 1rem;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            border-bottom: 1px solid #dee2e6;
+        }
+        
+        .file-list-item:hover {
+            background-color: #e9ecef;
+        }
+        
+        .file-list-item.active {
+            background-color: #e9ecef;
+            font-weight: bold;
+        }
+        
+        .code-viewer-content {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+        
+        .code-display {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem;
+            background-color: #fff;
+        }
+        
+        .code-display pre {
+            margin: 0;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            padding: 1rem;
+            overflow-x: auto;
+        }
+        
+        .file-nav {
+            padding: 1rem;
+            border-bottom: 1px solid #dee2e6;
+        }
+        
+        .file-nav select {
+            width: 100%;
+            padding: 0.5rem;
+            border-radius: 4px;
+            border: 1px solid #ced4da;
         }
         
         @media (max-width: 768px) {
@@ -152,6 +270,17 @@
             .navbar-links li {
                 margin: 0.5rem 0;
             }
+            
+            .code-viewer-content {
+                flex-direction: column;
+            }
+            
+            .code-viewer-sidebar {
+                width: 100%;
+                max-height: 150px;
+                border-right: none;
+                border-bottom: 1px solid #dee2e6;
+            }
         }
     </style>
 </head>
@@ -176,37 +305,103 @@
         </div>
     </div>
     
+    <!-- Code Viewer Overlay -->
+    <div class="code-viewer-overlay" id="codeViewerOverlay">
+        <div class="code-viewer-container">
+            <div class="code-viewer-header">
+                <h3 class="code-viewer-title" id="codeViewerTitle">Source Code</h3>
+                <button class="code-viewer-close" id="codeViewerClose">&times;</button>
+            </div>
+            <div class="code-viewer-content">
+                <div class="code-viewer-sidebar">
+                    <div class="file-nav">
+                        <select id="fileSelector">
+                            <!-- File options will be dynamically added here -->
+                        </select>
+                    </div>
+                    <ul class="file-list" id="fileList">
+                        <!-- File list items will be dynamically added here -->
+                    </ul>
+                </div>
+                <div class="code-display">
+                    <pre><code id="codeDisplay">Select a file to view its source code.</code></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+    
     <script>
-        // Sample project data - replace with your actual projects
+        // Project data with source files
         const projects = [
             {
                 name: "Array Multiplication",
                 description: "Example showing multiplication of an array by a scalar using a WebGPU compute pipeline",
                 path: "Array Multiplication/dist/index.html",
-                repoPath: "Array Multiplication/src"
+                sourceFiles: [
+                    "app.ts",
+                    "arrayMulti.wgsl",
+                    "wgsl.d.ts"
+                ],
+                basePath: "Array Multiplication/src/"
             },
             {
                 name: "Matrix Multiplication",
                 description: "Example showing matrix multiplication using a WebGPU compute pipeline, and time comparison with a Javascript implementation",
                 path: "Matrix Multiplication/dist/index.html",
-                repoPath: "Matrix Multiplication/src"
+                sourceFiles: [
+                    "app.ts",
+                    "gpu-matrix.ts",
+                    "js-matrix.ts",
+                    "matrixMulti.wgsl",
+                    "TimestampQueryManager.ts",
+                    "util.ts",
+                    "wgsl.d.ts"
+                ],
+                basePath: "Matrix Multiplication/src/"
             },
             {
                 name: "Basic Rendering",
                 description: "Example showing a basic rendering application displaying multiple triangles on a canvas using a WebGPU render pipeline",
                 path: "Basic Rendering/dist/index.html",
-                repoPath: "Basic Rendering/src"
+                sourceFiles: [
+                    "camera.ts",
+                    "triangle.ts",
+                    "triangle.wgsl",
+                    "wgsl.d.ts"
+                ],
+                basePath: "Basic Rendering/src/"
             },
             {
                 name: "Graph Rendering",
                 description: "Example showing graph drawing with physically-based graph layout creation in a WebGPU compute pipeline and rendering in a WebGPU render pipeline",
                 path: "Graph Rendering/dist/index.html",
-                repoPath: "Graph Rendering/src"
+                sourceFiles: [
+                    "camera.ts",
+                    "edge.wgsl",
+                    "forceDirected.ts",
+                    "forces.wgsl",
+                    "graph.ts",
+                    "node.wgsl",
+                    "wgsl.d.ts"
+                ],
+                basePath: "Graph Rendering/src/"
             }
         ];
         
-        // Populate navigation links
+        // Base URL for GitHub repository
+        const baseRepoUrl = "https://harp-lab.com/cder-webGPU/";
+        
+        // DOM elements
         const navLinks = document.getElementById('navLinks');
+        const projectGrid = document.getElementById('projectGrid');
+        const codeViewerOverlay = document.getElementById('codeViewerOverlay');
+        const codeViewerClose = document.getElementById('codeViewerClose');
+        const codeViewerTitle = document.getElementById('codeViewerTitle');
+        const fileSelector = document.getElementById('fileSelector');
+        const fileList = document.getElementById('fileList');
+        const codeDisplay = document.getElementById('codeDisplay');
+        
+        // Populate navigation links
         projects.forEach(project => {
             const li = document.createElement('li');
             const a = document.createElement('a');
@@ -217,7 +412,6 @@
         });
         
         // Populate project cards
-        const projectGrid = document.getElementById('projectGrid');
         projects.forEach(project => {
             const card = document.createElement('div');
             card.className = 'project-card';
@@ -238,19 +432,173 @@
             link.href = project.path;
             link.textContent = 'Go To Module';
             
-            const repoLink = document.createElement('a');
-            repoLink.className = 'project-link';
-            repoLink.href = project.repoPath;
-            repoLink.textContent = 'View Source Code';
-            repoLink.style.marginLeft = '10px';
-            repoLink.style.backgroundColor = '#6c757d';
+            const viewSourceLink = document.createElement('a');
+            viewSourceLink.className = 'project-link';
+            viewSourceLink.href = "#";
+            viewSourceLink.textContent = 'View Source Code';
+            viewSourceLink.style.backgroundColor = '#6c757d';
+            viewSourceLink.dataset.project = project.name;
+            viewSourceLink.addEventListener('click', (e) => {
+                e.preventDefault();
+                openCodeViewer(project);
+            });
             
             content.appendChild(title);
             content.appendChild(description);
             content.appendChild(link);
-            content.appendChild(repoLink);
+            content.appendChild(viewSourceLink);
             card.appendChild(content);
             projectGrid.appendChild(card);
+        });
+        
+        // Code viewer functions
+        function openCodeViewer(project) {
+            // Set the title
+            codeViewerTitle.textContent = `${project.name} - Source Code`;
+            
+            // Clear previous file list
+            fileList.innerHTML = '';
+            fileSelector.innerHTML = '';
+            
+            // Populate file selector dropdown
+            const defaultOption = document.createElement('option');
+            defaultOption.value = '';
+            defaultOption.textContent = 'Select a file...';
+            fileSelector.appendChild(defaultOption);
+            
+            // Add file options and list items
+            project.sourceFiles.forEach((file, index) => {
+                // Add to dropdown
+                const option = document.createElement('option');
+                option.value = file;
+                option.textContent = file;
+                fileSelector.appendChild(option);
+                
+                // Add to sidebar list
+                const li = document.createElement('li');
+                li.className = 'file-list-item';
+                li.textContent = file;
+                li.dataset.file = file;
+                li.dataset.path = `${baseRepoUrl}${project.basePath}${file}`;
+                li.addEventListener('click', () => {
+                    loadFile(li.dataset.path, file);
+                    // Update active state
+                    document.querySelectorAll('.file-list-item').forEach(item => {
+                        item.classList.remove('active');
+                    });
+                    li.classList.add('active');
+                    // Update dropdown
+                    fileSelector.value = file;
+                });
+                fileList.appendChild(li);
+                
+                // If first file, load it automatically
+                if (index === 0) {
+                    setTimeout(() => {
+                        li.click();
+                    }, 100);
+                }
+            });
+            
+            // File selector change event
+            fileSelector.addEventListener('change', () => {
+                if (fileSelector.value) {
+                    const path = `${baseRepoUrl}${project.basePath}${fileSelector.value}`;
+                    loadFile(path, fileSelector.value);
+                    
+                    // Update active state in list
+                    document.querySelectorAll('.file-list-item').forEach(item => {
+                        item.classList.remove('active');
+                        if (item.dataset.file === fileSelector.value) {
+                            item.classList.add('active');
+                        }
+                    });
+                }
+            });
+            
+            // Show the overlay
+            codeViewerOverlay.style.display = 'flex';
+        }
+        
+        // Load file content
+        async function loadFile(path, filename) {
+            try {
+                codeDisplay.textContent = 'Loading...';
+                const response = await fetch(path);
+                
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch file: ${response.status} ${response.statusText}`);
+                }
+                
+                const content = await response.text();
+                
+                // Determine language for syntax highlighting
+                let language = 'typescript';
+                if (filename.endsWith('.wgsl')) {
+                    language = 'wgsl';
+                } else if (filename.endsWith('.js')) {
+                    language = 'javascript';
+                } else if (filename.endsWith('.html')) {
+                    language = 'html';
+                } else if (filename.endsWith('.css')) {
+                    language = 'css';
+                }
+                
+                // Set content and apply syntax highlighting
+                codeDisplay.textContent = content;
+                codeDisplay.className = `language-${language}`;
+                hljs.highlightElement(codeDisplay);
+            } catch (error) {
+                console.error('Error loading file:', error);
+                codeDisplay.textContent = `Error loading file: ${error.message}`;
+            }
+        }
+        
+        // Close code viewer
+        codeViewerClose.addEventListener('click', () => {
+            codeViewerOverlay.style.display = 'none';
+        });
+        
+        // Close code viewer when clicking outside
+        codeViewerOverlay.addEventListener('click', (e) => {
+            if (e.target === codeViewerOverlay) {
+                codeViewerOverlay.style.display = 'none';
+            }
+        });
+        
+        // Initialize highlight.js
+        document.addEventListener('DOMContentLoaded', () => {
+            // Register WGSL language if not already registered
+            if (!hljs.getLanguage('wgsl')) {
+                hljs.registerLanguage('wgsl', function(hljs) {
+                    return {
+                        name: 'WGSL',
+                        aliases: ['wgsl'],
+                        keywords: {
+                            keyword:
+                                'var let const fn struct type alias break continue discard else if elseif loop for while return switch case default ' +
+                                'storage_buffer uniform workgroup private function input output',
+                            type:
+                                'bool u32 i32 f32 vec2 vec3 vec4 mat2x2 mat3x3 mat4x4 ' +
+                                'atomic texture sampler',
+                            built_in:
+                                'vertex_index instance_index position front_facing frag_coord ' +
+                                'local_invocation_id local_invocation_index global_invocation_id ' +
+                                'workgroup_id num_workgroups'
+                        },
+                        contains: [
+                            hljs.C_LINE_COMMENT_MODE,
+                            hljs.C_BLOCK_COMMENT_MODE,
+                            hljs.C_NUMBER_MODE,
+                            {
+                                className: 'string',
+                                begin: '"', end: '"',
+                                contains: [hljs.BACKSLASH_ESCAPE]
+                            }
+                        ]
+                    };
+                });
+            }
         });
     </script>
 </body>
