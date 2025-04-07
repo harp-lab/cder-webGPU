@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Module Navigation</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f8f9fa;
+        }
+        
+        .navbar {
+            background-color: #343a40;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+        
+        .container {
+            width: 90%;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 15px;
+        }
+        
+        .navbar-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 0;
+        }
+        
+        .brand {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #fff;
+            text-decoration: none;
+        }
+        
+        .navbar-links {
+            display: flex;
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+        
+        .navbar-links li {
+            margin-left: 1.5rem;
+        }
+        
+        .navbar-links a {
+            color: rgba(255, 255, 255, 0.8);
+            text-decoration: none;
+            font-size: 1rem;
+            transition: color 0.3s;
+        }
+        
+        .navbar-links a:hover {
+            color: #fff;
+        }
+        
+        .content {
+            padding: 2rem 0;
+        }
+        
+        .project-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 2rem;
+            margin-top: 2rem;
+        }
+        
+        .project-card {
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+        
+        .project-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 15px rgba(0, 0, 0, 0.1);
+        }
+        
+        .project-content {
+            padding: 1.5rem;
+        }
+        
+        .project-title {
+            font-size: 1.25rem;
+            margin-top: 0;
+            margin-bottom: 0.5rem;
+        }
+        
+        .project-description {
+            color: #6c757d;
+            margin-bottom: 1.5rem;
+        }
+        
+        .project-link {
+            display: inline-block;
+            background-color: #343a40;
+            color: #fff;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            text-decoration: none;
+            font-weight: 500;
+            transition: background-color 0.3s;
+        }
+        
+        .project-link:hover {
+            background-color: #23272b;
+        }
+        
+        .mobile-toggle {
+            display: none;
+            background: none;
+            border: none;
+            color: #fff;
+            font-size: 1.5rem;
+            cursor: pointer;
+        }
+        
+        @media (max-width: 768px) {
+            .mobile-toggle {
+                display: block;
+            }
+            
+            .navbar-links {
+                position: fixed;
+                top: 60px;
+                left: 0;
+                width: 100%;
+                background-color: #343a40;
+                flex-direction: column;
+                align-items: center;
+                padding: 1rem 0;
+                transform: translateY(-100%);
+                transition: transform 0.3s ease-in-out;
+                z-index: 999;
+            }
+            
+            .navbar-links.active {
+                transform: translateY(0);
+            }
+            
+            .navbar-links li {
+                margin: 0.5rem 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container navbar-container">
+            <a href="#" class="brand">WebGPU Modules</a>
+            <ul class="navbar-links" id="navLinks">
+                <!-- Project links will be dynamically added here -->
+            </ul>
+        </div>
+    </nav>
+    
+    <div class="container content">
+        <h1>Welcome to WebGPU Modules</h1>
+        <p>This is a central navigation page for WebGPU modules for the chapter 
+            "Understanding GPU Acceleration Using WebGPU" in "Topics in Parallel and Distributed Computing:
+            From Concepts to the Classroom"</p>
+        
+        <div class="project-grid" id="projectGrid">
+            <!-- Project cards will be dynamically added here -->
+        </div>
+    </div>
+    
+    <script>
+        // Sample project data - replace with your actual projects
+        const projects = [
+            {
+                name: "Array Multiplication",
+                description: "Example showing multiplication of an array by a scalar using a WebGPU compute pipeline",
+                path: "Array Multiplication/dist/index.html",
+                repoPath: "Array Multiplication/src"
+            },
+            {
+                name: "Matrix Multiplication",
+                description: "Example showing matrix multiplication using a WebGPU compute pipeline, and time comparison with a Javascript implementation",
+                path: "Matrix Multiplication/dist/index.html",
+                repoPath: "Matrix Multiplication/src"
+            },
+            {
+                name: "Basic Rendering",
+                description: "Example showing a basic rendering application displaying multiple triangles on a canvas using a WebGPU render pipeline",
+                path: "Basic Rendering/dist/index.html",
+                repoPath: "Basic Rendering/src"
+            },
+            {
+                name: "Graph Rendering",
+                description: "Example showing graph drawing with physically-based graph layout creation in a WebGPU compute pipeline and rendering in a WebGPU render pipeline",
+                path: "Graph Rendering/dist/index.html",
+                repoPath: "Graph Rendering/src"
+            }
+        ];
+        
+        // Populate navigation links
+        const navLinks = document.getElementById('navLinks');
+        projects.forEach(project => {
+            const li = document.createElement('li');
+            const a = document.createElement('a');
+            a.href = project.path;
+            a.textContent = project.name;
+            li.appendChild(a);
+            navLinks.appendChild(li);
+        });
+        
+        // Populate project cards
+        const projectGrid = document.getElementById('projectGrid');
+        projects.forEach(project => {
+            const card = document.createElement('div');
+            card.className = 'project-card';
+            
+            const content = document.createElement('div');
+            content.className = 'project-content';
+            
+            const title = document.createElement('h3');
+            title.className = 'project-title';
+            title.textContent = project.name;
+            
+            const description = document.createElement('p');
+            description.className = 'project-description';
+            description.textContent = project.description;
+            
+            const link = document.createElement('a');
+            link.className = 'project-link';
+            link.href = project.path;
+            link.textContent = 'Go To Module';
+            
+            const repoLink = document.createElement('a');
+            repoLink.className = 'project-link';
+            repoLink.href = project.repoPath;
+            repoLink.textContent = 'View Source Code';
+            repoLink.style.marginLeft = '10px';
+            repoLink.style.backgroundColor = '#6c757d';
+            
+            content.appendChild(title);
+            content.appendChild(description);
+            content.appendChild(link);
+            content.appendChild(repoLink);
+            card.appendChild(content);
+            projectGrid.appendChild(card);
+        });
+    </script>
+</body>
+</html>

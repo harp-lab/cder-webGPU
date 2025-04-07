@@ -9,4 +9,3 @@ js/liblas_wrapper.js
 .DS_Store
 glslc.exe
 node_modules
-dist/
