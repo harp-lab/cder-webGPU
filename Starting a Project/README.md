@@ -55,6 +55,11 @@ module.exports = {
         test: /\.tsx?$/,
         use: 'ts-loader',
         exclude: /node_modules/,
+      },
+      {
+        // Embed your WGSL files as strings
+        test: /\.wgsl$/i,
+        type: "asset/source",
       }
     ],
   },
