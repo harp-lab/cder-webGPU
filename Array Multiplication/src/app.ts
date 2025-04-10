@@ -3,10 +3,10 @@ import shaderCode from "./arrayMulti.wgsl";
 (async () => {
     // Get the info element where we'll display results
     const infoElement = document.querySelector("#info pre");
+    var displayError = false;
     
     if (navigator.gpu === undefined) {
-        document.getElementById("webgpu-canvas").setAttribute("style", "display:none;");
-        document.getElementById("no-webgpu").setAttribute("style", "display:block;");
+        displayError = true;
         if (infoElement) {
             infoElement.textContent = "WebGPU is not supported in your browser.";
         }
@@ -15,6 +15,7 @@ import shaderCode from "./arrayMulti.wgsl";
 
     // Check for WebGPU support
     if (!navigator.gpu) {
+        displayError = true;
         if (infoElement) {
             infoElement.textContent = "WebGPU not supported on this browser.";
         }
@@ -24,12 +25,17 @@ import shaderCode from "./arrayMulti.wgsl";
     // Request an adapter
     const adapter = await navigator.gpu.requestAdapter();
     if (!adapter) {
+        displayError = true;
         if (infoElement) {
             infoElement.textContent = "No appropriate GPU adapter found.";
         }
         throw new Error("No appropriate GPU adapter found.");
     }
 
+    if (displayError) {
+        console.log("No WebGPU Device available.");
+        alert("WebGPU is not supported in your browser! Visit https://webgpureport.org/ for info about your system.")
+    }
     // Request a device from the adapter
     const device = await adapter.requestDevice();
     

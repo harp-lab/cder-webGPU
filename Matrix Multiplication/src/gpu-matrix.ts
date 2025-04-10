@@ -35,16 +35,42 @@ function printMatrix(matrix: Uint32Array, width: number, label: string) {
 
 
 export async function runWebGPUMultiplication(M: number[][], N: number[][]): Promise<number> {
+    const infoElement = document.querySelector("#info pre");
+    var displayError = false;
+    
     if (navigator.gpu === undefined) {
-        document.getElementById("webgpu-canvas").setAttribute("style", "display:none;");
-        document.getElementById("no-webgpu").setAttribute("style", "display:block;");
-        return;
+        console.log("test");
+        displayError = true;
+        if (infoElement) {
+            infoElement.textContent = "WebGPU is not supported in your browser.";
+        }
+        return 0;
     }
 
-    // Get a GPU device to render with
-    const adapter = await navigator.gpu?.requestAdapter({
-        featureLevel: 'compatibility',
-    });
+    // Check for WebGPU support
+    if (!navigator.gpu) {
+        displayError = true;
+        if (infoElement) {
+            infoElement.textContent = "WebGPU not supported on this browser.";
+        }
+        return 0;
+    }
+
+    // Request an adapter
+    const adapter = await navigator.gpu.requestAdapter();
+    if (!adapter) {
+        displayError = true;
+        if (infoElement) {
+            infoElement.textContent = "No appropriate GPU adapter found.";
+        }
+        return 0;
+    }
+
+    if (displayError) {
+        console.log("No WebGPU Device available.");
+        alert("WebGPU is not supported in your browser! Visit https://webgpureport.org/ for info about your system.")
+    }
+
     const supportsTimestampQueries = adapter?.features.has('timestamp-query');
     const device = await adapter?.requestDevice({
         // We request a device that has support for timestamp queries
@@ -71,7 +97,7 @@ export async function runWebGPUMultiplication(M: number[][], N: number[][]): Pro
         }
         if (hadError) {
             console.log("Shader failed to compile");
-            return;
+            return 0;
         }
     }
 

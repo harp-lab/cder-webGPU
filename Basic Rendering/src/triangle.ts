@@ -5,14 +5,48 @@ import {
 } from "./camera";
 
 async function main() {
-
-    // Canvas and device setup
-    const device = await navigator.gpu.requestAdapter().then(adapter => adapter?.requestDevice());
-    if (!device) {
-        alert("WebGPU not supported");
+    const infoElement = document.querySelector("#info pre");
+    var displayError = false;
+    
+    if (navigator.gpu === undefined) {
+        displayError = true;
+        if (infoElement) {
+            infoElement.textContent = "WebGPU is not supported in your browser.";
+        }
         return;
     }
 
+    // Check for WebGPU support
+    if (!navigator.gpu) {
+        displayError = true;
+        if (infoElement) {
+            infoElement.textContent = "WebGPU not supported on this browser.";
+        }
+        throw new Error("WebGPU not supported on this browser.");
+    }
+
+    // Request an adapter
+    const adapter = await navigator.gpu.requestAdapter();
+    if (!adapter) {
+        displayError = true;
+        if (infoElement) {
+            infoElement.textContent = "No appropriate GPU adapter found.";
+        }
+        throw new Error("No appropriate GPU adapter found.");
+    }
+
+    if (displayError) {
+        console.log("No WebGPU Device available.");
+        alert("WebGPU is not supported in your browser! Visit https://webgpureport.org/ for info about your system.")
+    }
+
+    // Canvas and device setup
+    const device = await adapter.requestDevice();
+    if (!device) {
+        console.log("WebGPU not supported");
+        alert("WebGPU not supported");
+        return;
+    }
     // Configure rendering context
     const canvas = document.getElementById("webgpu-canvas") as HTMLCanvasElement;
     const context = canvas.getContext("webgpu") as GPUCanvasContext;
